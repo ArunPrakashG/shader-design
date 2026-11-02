@@ -1,0 +1,11 @@
+{
+  "name": "shader-design",
+  "version": "0.1.0",
+  "description": "An AI agent designs anything by writing a GLSL fragment shader and nothing else, with compiler feedback and a rendered-frame self-review.",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node build-artifact.js",
+    "test": "node build-artifact.js && node e2e.js ./e2e-out && PAGE=dist/shader-design.html node e2e.js ./e2e-out-dist"
+  }
+}

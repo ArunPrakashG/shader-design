@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Shader Design</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--text:#e8eaf0;--mute:#8a93a6;--accent:#7cc4ff;--bad:#ff7b7b;--ok:#7be0a3;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f4f5f8;--panel:#fff;--line:#dfe3ea;--text:#171a21;--mute:#667085;--accent:#0b6bcb;--bad:#c62828;--ok:#1b7f4b;color-scheme:light}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f5f8;--panel:#fff;--line:#dfe3ea;--text:#171a21;--mute:#667085;--accent:#0b6bcb;--bad:#c62828;--ok:#1b7f4b;color-scheme:light}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.app{display:grid;grid-template-columns:minmax(300px,400px) 1fr;height:100%}
+.side>*{flex-shrink:0}
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;overflow:auto;padding:16px;gap:14px}
+h1{font-size:16px;margin:0}
+.sub{color:var(--mute);margin:2px 0 0;font-size:12.5px}
+label{display:block;font-size:12px;color:var(--mute);margin-bottom:5px}
+textarea{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}
+textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#req{min-height:96px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer}
+.chip:hover{color:var(--text);border-color:var(--mute)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button.primary{background:var(--accent);color:#04121f;border:0;border-radius:8px;padding:9px 14px;cursor:pointer;font:inherit;font-weight:600}
+button.primary:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit}
+.dir{font-size:12px;color:var(--mute);border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
+.dir b{color:var(--text);font-weight:600}
+.log{font-size:12.5px;display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.log div{padding:3px 0;border-bottom:1px solid var(--line)}
+.log .warn,.log .stopped,.log .err{color:var(--bad)}
+.log .keep,.log .done{color:var(--ok)}
+#code{min-height:220px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;tab-size:2}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--mute);font-size:12.5px;flex-wrap:wrap}
+.bar .grow{flex:1}
+#stage{flex:1;min-height:0;overflow:hidden;background:repeating-conic-gradient(var(--line) 0 25%,transparent 0 50%) 0 0/20px 20px;position:relative}
+#empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);text-align:center;padding:24px;pointer-events:none}
+.issues{font-size:12px;color:var(--bad);padding:6px 14px;border-top:1px solid var(--line);display:none}
+.issues.on{display:block}
+@media (max-width:760px){.app{grid-template-columns:1fr;grid-template-rows:auto minmax(420px,1fr);height:auto}.side{border-right:0;border-bottom:1px solid var(--line);overflow:visible}#stage{min-height:480px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div><h1>Shader Design</h1><p class="sub">The agent answers with a GLSL fragment shader and nothing else. No HTML, no markup, no component catalog. It sees compiler errors and a rendered frame of its own work.</p></div>
+
+    <div>
+      <label for="req">What should it design?</label>
+      <textarea id="req" placeholder="A poster for a night market in Kochi, an animated logo for a coffee roaster, a chart of monsoon rainfall, light on water…"></textarea>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="dir" id="dir">Art direction is picked at random for each run, so the same request gives different work.</div>
+
+    <div class="row">
+      <button class="primary" id="go">Design it</button>
+      <button class="ghost" id="stopBtn" hidden>Stop</button>
+      <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="review" checked> self-review</label>
+    </div>
+    <div id="unavail" class="sub" hidden>This page can only ask Claude when it runs as a Claude artifact. You can still paste a shader in the Code box and render it.</div>
+
+    <div class="log" id="log" aria-live="polite"></div>
+
+    <div>
+      <label for="code">Shader (editable)</label>
+      <textarea id="code" spellcheck="false">// design:size fluid
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = fragCoord / iResolution.xy;
+  vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * 3.0 + vec3(0.0, 2.0, 4.0));
+  fragColor = vec4(col, 1.0);
+}</textarea>
+      <div class="row" style="margin-top:8px"><button class="ghost" id="renderCode">Render this</button><button class="ghost" id="copy">Copy</button></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="bar"><span id="meta">Nothing rendered yet</span><span class="grow"></span><button class="ghost" id="shot" disabled hidden>Save PNG</button></div>
+    <div id="stage"></div>
+    <div class="issues" id="issues"></div>
+  </main>
+</div>
+<script src="prompts.js"></script>
+<script src="shaderhost.js"></script>
+<script src="loop.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

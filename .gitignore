@@ -1,0 +1,5 @@
+node_modules
+.env
+*-out
+e2e-out*
+dist
